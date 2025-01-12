@@ -4,7 +4,7 @@ from github import Github
 
 
 # Set up authentication
-GITHUB_TOKEN = "${{secrets.TOKEN}}"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
 WORKFLOW_PATH = ".github/workflows/"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
