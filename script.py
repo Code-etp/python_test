@@ -1,5 +1,6 @@
 import os
 from github import Github, GithubException
+import base64
 
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -19,57 +20,96 @@ def update_workflow(repo_name, file_path, content, branch="main"):
     try:
         repo = g.get_repo(f"{ORG_NAME}/{repo_name}")
         file = repo.get_contents(file_path, ref=branch)
-        updated_content = content.replace(SEARCH_STRING, REPLACE_STRING)
         
+        # Decode content if it's base64 encoded
+        if isinstance(content, bytes):
+            content = content.decode('utf-8')
+            
         if SEARCH_STRING in content:
-            repo.update_file(
-                file_path,
-                f"Update ECS task definition to {REPLACE_STRING}",
-                updated_content,
-                file.sha,
-                branch=branch,
-            )
-            print(f"Updated: {repo_name}/{file_path}")
+            updated_content = content.replace(SEARCH_STRING, REPLACE_STRING)
+            try:
+                repo.update_file(
+                    file_path,
+                    f"Update ECS task definition from {SEARCH_STRING} to {REPLACE_STRING}",
+                    updated_content,
+                    file.sha,
+                    branch=branch,
+                )
+                print(f"✅ Successfully updated: {repo_name}/{file_path}")
+                return True
+            except GithubException as e:
+                print(f"❌ Failed to update {repo_name}/{file_path}: {e}")
+                return False
         else:
-            print(f"No changes needed for: {repo_name}/{file_path}")
+            print(f"ℹ️ No changes needed for: {repo_name}/{file_path}")
+            return False
     except GithubException as e:
-        print(f"Error updating {repo_name}/{file_path}: {e}")
+        print(f"❌ Error accessing {repo_name}/{file_path}: {e}")
+        return False
     except Exception as e:
-        print(f"Unexpected error updating {repo_name}/{file_path}: {e}")
+        print(f"❌ Unexpected error updating {repo_name}/{file_path}: {e}")
+        return False
 
 def process_workflows(repo):
     """Process workflow files in a repository."""
+    changes_made = False
     try:
         contents = repo.get_contents(WORKFLOW_PATH)
+        
+        # Handle both single file and directory cases
+        if not isinstance(contents, list):
+            contents = [contents]
+            
         for content_file in contents:
             if content_file.path.endswith((".yml", ".yaml")):
-                workflow_content = content_file.decoded_content.decode("utf-8")
-                update_workflow(repo.name, content_file.path, workflow_content)
+                try:
+                    workflow_content = content_file.decoded_content
+                    if update_workflow(repo.name, content_file.path, workflow_content):
+                        changes_made = True
+                except Exception as e:
+                    print(f"❌ Error processing {content_file.path}: {e}")
+                    
+        return changes_made
     except GithubException as e:
         if e.status == 404:
-            print(f"No workflows directory in repo: {repo.name}")
+            print(f"ℹ️ No workflows directory in repo: {repo.name}")
         else:
-            print(f"Error accessing workflows in repo {repo.name}: {e}")
+            print(f"❌ Error accessing workflows in repo {repo.name}: {e}")
+        return False
     except Exception as e:
-        print(f"Unexpected error in repo {repo.name}: {e}")
+        print(f"❌ Unexpected error in repo {repo.name}: {e}")
+        return False
 
 def main():
     """Main function to update workflows."""
     try:
-        # Authenticate and get account
+        # Try to authenticate as organization first, then as user
         try:
             org = g.get_organization(ORG_NAME)
-            print(f"Authenticated as organization: {org.login}")
+            print(f"🔑 Authenticated as organization: {org.login}")
         except GithubException:
             org = g.get_user(ORG_NAME)
-            print(f"Authenticated as user: {org.login}")
+            print(f"🔑 Authenticated as user: {org.login}")
+        
+        # Track statistics
+        total_repos = 0
+        updated_repos = 0
         
         # Process each repository
         for repo in org.get_repos():
-            print(f"Processing repo: {repo.name}")
-            process_workflows(repo)
+            total_repos += 1
+            print(f"\n📁 Processing repo: {repo.name}")
+            if process_workflows(repo):
+                updated_repos += 1
+        
+        # Print summary
+        print("\n📊 Summary:")
+        print(f"Total repositories processed: {total_repos}")
+        print(f"Repositories updated: {updated_repos}")
+        print(f"Repositories unchanged: {total_repos - updated_repos}")
+        
     except Exception as e:
-        print(f"Error accessing account: {e}")
+        print(f"❌ Error accessing account: {e}")
 
 if __name__ == "__main__":
     main()
