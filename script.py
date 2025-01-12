@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.INFO,
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
+WORKFLOW_PATH = ".github/workflows"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
 CREATE_PR = False  # Set to False for direct commits
@@ -67,25 +68,18 @@ def get_default_branch(repo):
         logging.error(f"Error getting default branch for {repo.name}: {str(e)}")
         return 'main'
 
-def search_and_update_files(repo, branch, path=None):
-    """Recursively search and update files in all directories."""
+def search_and_update_workflow_files(repo, branch):
+    """Search and update files only in .github/workflows directory."""
     try:
         check_rate_limit()
-        
-        if path is None:
-            path = ''
             
-        contents = repo.get_contents(path, ref=branch)
+        contents = repo.get_contents(WORKFLOW_PATH, ref=branch)
         if not isinstance(contents, list):
             contents = [contents]
             
         updated = False
         for content in contents:
-            if content.type == "dir":
-                # Recursively search subdirectories
-                if search_and_update_files(repo, branch, content.path):
-                    updated = True
-            elif content.type == "file":
+            if content.type == "file" and content.path.endswith(('.yml', '.yaml')):
                 try:
                     file_content = content.decoded_content.decode('utf-8')
                     if SEARCH_STRING in file_content:
@@ -103,26 +97,26 @@ def search_and_update_files(repo, branch, path=None):
                         logging.info(f"✅ Successfully updated {repo.name}/{content.path}")
                         updated = True
                 except Exception as e:
-                    logging.error(f"Error processing file {content.path}: {str(e)}")
+                    logging.error(f"Error processing workflow file {content.path}: {str(e)}")
                     
         return updated
         
     except GithubException as e:
         if e.status == 404:
-            logging.info(f"Path {path} not found in {repo.name}")
+            logging.info(f"Workflows directory not found in {repo.name}")
         else:
-            logging.error(f"Error accessing {path} in {repo.name}: {str(e)}")
+            logging.error(f"Error accessing workflows in {repo.name}: {str(e)}")
         return False
 
 def main():
-    """Main function to process repositories and update files."""
+    """Main function to process repositories and update workflow files."""
     try:
         repos = get_organization_repositories()
         
         total_repos = len(repos)
         repos_updated = 0
         
-        logging.info(f"Starting file updates for {total_repos} repositories.")
+        logging.info(f"Starting workflow file updates for {total_repos} repositories.")
         
         for repo in repos:
             try:
@@ -131,7 +125,7 @@ def main():
                 default_branch = get_default_branch(repo)
                 logging.info(f"Default branch for {repo.full_name}: {default_branch}")
                 
-                if search_and_update_files(repo, default_branch):
+                if search_and_update_workflow_files(repo, default_branch):
                     repos_updated += 1
                     logging.info(f"✅ Repository updated: {repo.full_name}")
                 else:
@@ -143,7 +137,7 @@ def main():
         logging.info("\n📊 Summary:")
         logging.info(f"Total repositories processed: {total_repos}")
         logging.info(f"Repositories updated: {repos_updated}")
-        logging.info("🚀 Update process completed.")
+        logging.info("🚀 Workflow update process completed.")
     
     except Exception as main_error:
         logging.error(f"Critical error in main execution: {str(main_error)}")
