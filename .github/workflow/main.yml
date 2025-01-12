@@ -1,0 +1,30 @@
+name: Update ECS Task Workflows
+
+on:
+  push:
+    branches:
+      - main
+  # workflow_dispatch: # Trigger manually
+  # schedule:
+  #   - cron: "0 0 * * 1" # Run weekly on Monday at midnight
+
+jobs:
+  update-ecs-task:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the script repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        run: pip install PyGithub requests
+
+      - name: Run the update script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python script.py
