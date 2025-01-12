@@ -12,6 +12,9 @@ jobs:
   update-ecs-task:
     runs-on: ubuntu-latest
 
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT }}
+
     steps:
       - name: Checkout the script repository
         uses: actions/checkout@v3
@@ -22,11 +25,13 @@ jobs:
           python-version: '3.x'
 
       - name: Install Python dependencies
-        run: pip install PyGithub requests
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyGithub requests
 
       - name: Run the update script
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
           python verify.py
           python script.py
