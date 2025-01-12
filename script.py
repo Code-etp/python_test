@@ -1,6 +1,7 @@
 import os
 from github import Github, GithubException
 import logging
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, 
@@ -9,7 +10,7 @@ logging.basicConfig(level=logging.INFO,
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
-WORKFLOW_PATH = "/.github/workflows/"
+WORKFLOW_PATH = ".github/workflows/"  # Removed leading slash
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
 CREATE_PR = False  # Set to False for direct commits
@@ -19,6 +20,17 @@ if not GITHUB_TOKEN:
 
 # Initialize GitHub API client
 g = Github(GITHUB_TOKEN)
+
+def check_rate_limit():
+    """Check and log the API rate limit."""
+    rate_limit = g.get_rate_limit()
+    remaining = rate_limit.core.remaining
+    reset_time = rate_limit.core.reset
+    if remaining == 0:
+        sleep_time = (reset_time - time.time()) + 1
+        logging.warning(f"Rate limit exceeded. Sleeping for {sleep_time} seconds.")
+        time.sleep(sleep_time)
+    logging.info(f"API Rate Limit: {remaining}/{rate_limit.core.limit}")
 
 def get_organization_repositories():
     """Get list of repositories from both organization and user."""
@@ -59,13 +71,13 @@ def get_default_branch(repo):
 def has_workflow_directory(repo, branch):
     """Check if repository has a workflow directory in the specified branch."""
     try:
-        try:
-            repo.get_contents(WORKFLOW_PATH, ref=branch)
-            return True
-        except GithubException as e:
-            if e.status == 404:
-                return False
-            raise
+        check_rate_limit()
+        repo.get_contents(WORKFLOW_PATH, ref=branch)
+        return True
+    except GithubException as e:
+        if e.status == 404:
+            return False
+        raise
     except Exception as e:
         logging.error(f"Error checking workflow directory in {repo.name}: {str(e)}")
         return False
@@ -74,6 +86,7 @@ def get_workflow_files(repo, branch):
     """Get all workflow files from a repository's specified branch."""
     workflow_files = []
     try:
+        check_rate_limit()
         contents = repo.get_contents(WORKFLOW_PATH, ref=branch)
         if not isinstance(contents, list):
             contents = [contents]
@@ -97,6 +110,7 @@ def get_workflow_files(repo, branch):
 def update_workflow_file(repo, workflow_file, branch):
     """Update a single workflow file if it contains the search string."""
     try:
+        check_rate_limit()
         content = workflow_file.decoded_content.decode('utf-8')
         
         if SEARCH_STRING in content:
