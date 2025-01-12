@@ -3,7 +3,7 @@ from github import Github, GithubException
 
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-ORG_NAME = "lahteeph"  # Can be personal or organizational account
+ORG_NAME = "lahteeph"
 WORKFLOW_PATH = ".github/workflows/"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
@@ -37,10 +37,26 @@ def update_workflow(repo_name, file_path, content, branch="main"):
     except Exception as e:
         print(f"Unexpected error updating {repo_name}/{file_path}: {e}")
 
+def process_workflows(repo):
+    """Process workflow files in a repository."""
+    try:
+        contents = repo.get_contents(WORKFLOW_PATH)
+        for content_file in contents:
+            if content_file.path.endswith((".yml", ".yaml")):
+                workflow_content = content_file.decoded_content.decode("utf-8")
+                update_workflow(repo.name, content_file.path, workflow_content)
+    except GithubException as e:
+        if e.status == 404:
+            print(f"No workflows directory in repo: {repo.name}")
+        else:
+            print(f"Error accessing workflows in repo {repo.name}: {e}")
+    except Exception as e:
+        print(f"Unexpected error in repo {repo.name}: {e}")
+
 def main():
     """Main function to update workflows."""
     try:
-        # Determine if ORG_NAME is a user or organization
+        # Authenticate and get account
         try:
             org = g.get_organization(ORG_NAME)
             print(f"Authenticated as organization: {org.login}")
@@ -50,17 +66,8 @@ def main():
         
         # Process each repository
         for repo in org.get_repos():
-            try:
-                # List all files in the workflow directory
-                contents = repo.get_contents(WORKFLOW_PATH)
-                for content_file in contents:
-                    if content_file.path.endswith((".yml", ".yaml")):
-                        workflow_content = content_file.decoded_content.decode("utf-8")
-                        update_workflow(repo.name, content_file.path, workflow_content)
-            except GithubException as e:
-                print(f"Error processing repo {repo.name}: {e}")
-            except Exception as e:
-                print(f"Unexpected error in repo {repo.name}: {e}")
+            print(f"Processing repo: {repo.name}")
+            process_workflows(repo)
     except Exception as e:
         print(f"Error accessing account: {e}")
 
