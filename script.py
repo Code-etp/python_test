@@ -1,5 +1,7 @@
 import os
 from github import Github, GithubException
+import random
+import string
 
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -7,12 +9,18 @@ ORG_NAME = "lahteeph"
 WORKFLOW_PATH = ".github/workflows/"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
+CREATE_PR = True  # Set to False for direct commits
 
 if not GITHUB_TOKEN:
     raise ValueError("GITHUB_TOKEN is not set in the environment.")
 
 # Initialize GitHub API client
 g = Github(GITHUB_TOKEN)
+
+def create_branch_name():
+    """Create a unique branch name for the changes."""
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    return f"update-ecs-action-{random_suffix}"
 
 def update_workflow(repo_name, file_path, content, branch="main"):
     """Update the workflow file with the new ECS action version."""
@@ -24,45 +32,61 @@ def update_workflow(repo_name, file_path, content, branch="main"):
         if isinstance(content, bytes):
             content = content.decode('utf-8')
         
-        # Debug print
         print(f"\nChecking file: {file_path}")
-        print(f"Current content type: {type(content)}")
-        print(f"Search string exists: {SEARCH_STRING in content}")
         
         if SEARCH_STRING in content:
             print(f"🔍 Found match in {repo_name}/{file_path}")
-            print("Original content snippet:")
-            start_idx = content.find(SEARCH_STRING)
-            print(content[max(0, start_idx-50):min(len(content), start_idx+150)])
-            
             updated_content = content.replace(SEARCH_STRING, REPLACE_STRING)
             
-            # Verify the replacement
-            if SEARCH_STRING in updated_content:
-                print("⚠️ Warning: Search string still exists after replacement!")
-            
-            try:
-                print(f"Attempting to update {repo_name}/{file_path}...")
-                result = repo.update_file(
-                    file_path,
-                    f"Update ECS task definition from {SEARCH_STRING} to {REPLACE_STRING}",
-                    updated_content,
-                    file.sha,
-                    branch=branch,
-                )
-                print(f"Update result: {result}")
-                print(f"✅ Successfully updated: {repo_name}/{file_path}")
-                return True
-            except GithubException as e:
-                print(f"❌ Failed to update {repo_name}/{file_path}")
-                print(f"Error details: {str(e)}")
-                return False
+            if CREATE_PR:
+                try:
+                    # Create a new branch
+                    new_branch = create_branch_name()
+                    source_branch = repo.get_branch(branch)
+                    repo.create_git_ref(f"refs/heads/{new_branch}", source_branch.commit.sha)
+                    
+                    # Commit changes to new branch
+                    commit_message = f"Update ECS task definition from {SEARCH_STRING} to {REPLACE_STRING}"
+                    repo.update_file(
+                        file_path,
+                        commit_message,
+                        updated_content,
+                        file.sha,
+                        branch=new_branch
+                    )
+                    
+                    # Create pull request
+                    pr = repo.create_pull(
+                        title=f"Update ECS task definition to {REPLACE_STRING}",
+                        body=f"Updates the ECS task definition action from {SEARCH_STRING} to {REPLACE_STRING}.\n\nAutomatically generated PR.",
+                        head=new_branch,
+                        base=branch
+                    )
+                    print(f"✅ Created PR #{pr.number} in {repo_name}")
+                    return True
+                except GithubException as e:
+                    print(f"❌ Failed to create PR for {repo_name}/{file_path}")
+                    print(f"Error details: {str(e)}")
+                    return False
+            else:
+                # Direct commit to branch
+                try:
+                    result = repo.update_file(
+                        file_path,
+                        f"Update ECS task definition from {SEARCH_STRING} to {REPLACE_STRING}",
+                        updated_content,
+                        file.sha,
+                        branch=branch
+                    )
+                    print(f"✅ Successfully updated: {repo_name}/{file_path}")
+                    return True
+                except GithubException as e:
+                    print(f"❌ Failed to update {repo_name}/{file_path}")
+                    print(f"Error details: {str(e)}")
+                    return False
         else:
             print(f"ℹ️ No match found in: {repo_name}/{file_path}")
             return False
-    except GithubException as e:
-        print(f"❌ Error accessing {repo_name}/{file_path}: {str(e)}")
-        return False
     except Exception as e:
         print(f"❌ Unexpected error updating {repo_name}/{file_path}: {str(e)}")
         return False
@@ -115,6 +139,8 @@ def main():
         # Track statistics
         total_repos = 0
         updated_repos = 0
+        
+        print(f"Mode: {'Creating PRs' if CREATE_PR else 'Direct commits'}")
         
         # Process each repository
         for repo in org.get_repos():
