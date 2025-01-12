@@ -27,4 +27,6 @@ jobs:
       - name: Run the update script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python script.py
+        run: |
+          python verify.py
+          python script.py
