@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  # workflow_dispatch: # Trigger manually
-  # schedule:
-  #   - cron: "0 0 * * 1" # Run weekly on Monday at midnight
 
 jobs:
   update-ecs-task:
@@ -30,6 +27,4 @@ jobs:
           pip install PyGithub requests
 
       - name: Run the update script
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
         run: python script.py
