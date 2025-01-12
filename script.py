@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO,
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
-WORKFLOW_PATH = ".github/workflows/"  # Removed leading slash
+WORKFLOW_PATH = ".github/workflows/" 
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
 CREATE_PR = False  # Set to False for direct commits
@@ -66,21 +66,36 @@ def get_default_branch(repo):
         return repo.default_branch
     except Exception as e:
         logging.error(f"Error getting default branch for {repo.name}: {str(e)}")
-        return 'main'  # fallback to main if can't determine
+        return 'main'
 
 def has_workflow_directory(repo, branch):
     """Check if repository has a workflow directory in the specified branch."""
     try:
         check_rate_limit()
-        repo.get_contents(WORKFLOW_PATH, ref=branch)
-        return True
+        contents = repo.get_contents("/", ref=branch)
+        
+        # Ensure contents is a list
+        if not isinstance(contents, list):
+            contents = [contents]
+
+        # Look for the workflow directory
+        for content in contents:
+            if content.type == "dir" and content.path == WORKFLOW_PATH.strip('/'):
+                logging.info(f"Workflow directory found in {repo.name}")
+                return True
+        
+        logging.info(f"No workflows directory found in {repo.name}")
+        return False
     except GithubException as e:
         if e.status == 404:
-            return False
-        raise
-    except Exception as e:
-        logging.error(f"Error checking workflow directory in {repo.name}: {str(e)}")
+            logging.info(f"No workflows directory found in {repo.name}")
+        else:
+            logging.error(f"Error checking workflows directory in {repo.name}: {str(e)}")
         return False
+    except Exception as e:
+        logging.error(f"Unexpected error checking workflows directory in {repo.name}: {str(e)}")
+        return False
+
 
 def get_workflow_files(repo, branch):
     """Get all workflow files from a repository's specified branch."""
@@ -141,50 +156,65 @@ def update_workflow_file(repo, workflow_file, branch):
 def main():
     """Main function to process repositories and update workflows."""
     try:
+        # Retrieve repositories
         repos = get_organization_repositories()
         
-        # Statistics
+        # Initialize statistics
         total_repos = len(repos)
         repos_with_workflows = 0
         repos_updated = 0
         
+        logging.info(f"Starting workflow updates for {total_repos} repositories.")
+        
         # Process each repository
         for repo in repos:
-            logging.info(f"\nProcessing repository: {repo.name}")
-            
-            # Get default branch
-            default_branch = get_default_branch(repo)
-            logging.info(f"Using default branch: {default_branch}")
-            
-            # Check if workflows directory exists in default branch
-            if has_workflow_directory(repo, default_branch):
-                logging.info(f"Found workflow directory in {repo.name}")
-                repos_with_workflows += 1
+            try:
+                logging.info(f"\n🔄 Processing repository: {repo.full_name}")
                 
-                # Get workflow files from default branch
-                workflow_files = get_workflow_files(repo, default_branch)
-                if workflow_files:
-                    logging.info(f"Found {len(workflow_files)} workflow files in {repo.name}")
-                    repo_updated = False
+                # Get the default branch
+                default_branch = get_default_branch(repo)
+                logging.info(f"Default branch for {repo.full_name}: {default_branch}")
+                
+                # Check if the workflows directory exists
+                if has_workflow_directory(repo, default_branch):
+                    logging.info(f"✅ Found '.github/workflows' in {repo.full_name}")
+                    repos_with_workflows += 1
                     
-                    # Process each workflow file
-                    for workflow_file in workflow_files:
-                        if update_workflow_file(repo, workflow_file, default_branch):
-                            repo_updated = True
-                    
-                    if repo_updated:
-                        repos_updated += 1
-            else:
-                logging.info(f"No workflow directory found in {repo.name}")
+                    # Get workflow files from the branch
+                    workflow_files = get_workflow_files(repo, default_branch)
+                    if workflow_files:
+                        logging.info(f"📂 Found {len(workflow_files)} workflow file(s) in {repo.full_name}")
+                        repo_updated = False
+                        
+                        # Process each workflow file
+                        for workflow_file in workflow_files:
+                            if update_workflow_file(repo, workflow_file, default_branch):
+                                repo_updated = True
+                        
+                        # Increment updated repositories counter if any file was updated
+                        if repo_updated:
+                            repos_updated += 1
+                            logging.info(f"✅ Repository updated: {repo.full_name}")
+                        else:
+                            logging.info(f"ℹ️ No updates needed for {repo.full_name}")
+                    else:
+                        logging.info(f"ℹ️ No workflow files found in {repo.full_name}")
+                else:
+                    logging.info(f"❌ No '.github/workflows' directory found in {repo.full_name}")
+            
+            except Exception as repo_error:
+                logging.error(f"Error processing repository {repo.full_name}: {str(repo_error)}")
         
         # Print summary
         logging.info("\n📊 Summary:")
         logging.info(f"Total repositories processed: {total_repos}")
         logging.info(f"Repositories with workflows: {repos_with_workflows}")
         logging.info(f"Repositories updated: {repos_updated}")
-        
-    except Exception as e:
-        logging.error(f"Error in main execution: {str(e)}")
+        logging.info("🚀 Workflow update process completed.")
+    
+    except Exception as main_error:
+        logging.error(f"Critical error in main execution: {str(main_error)}")
+
 
 if __name__ == "__main__":
     main()
