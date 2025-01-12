@@ -7,7 +7,7 @@ import time
 logging.basicConfig(level=logging.INFO, 
                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Set up authentication
+# authentication and variable 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
 WORKFLOW_PATH = ".github/workflows"
@@ -26,7 +26,6 @@ def get_organization_repositories():
     try:
         repositories = []
         
-        # Try organization first
         try:
             org = g.get_organization(ORG_NAME)
             logging.info(f"Found organization: {ORG_NAME}")
@@ -34,12 +33,10 @@ def get_organization_repositories():
         except GithubException as e:
             logging.warning(f"Could not access organization {ORG_NAME}, falling back to user repos: {str(e)}")
             
-        # Also get user's repositories
         user = g.get_user()
         logging.info(f"Authenticated as: {user.login}")
         user_repos = [repo for repo in user.get_repos() if repo.permissions.admin]
         
-        # Combine and deduplicate repositories
         all_repos = repositories + user_repos
         unique_repos = list({repo.full_name: repo for repo in all_repos}.values())
         
