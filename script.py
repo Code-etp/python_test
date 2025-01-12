@@ -3,7 +3,7 @@ from github import Github, GithubException
 import logging
 import time
 
-# Set up logging
+# logging format
 logging.basicConfig(level=logging.INFO, 
                    format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -13,24 +13,13 @@ ORG_NAME = "lahteeph"
 WORKFLOW_PATH = ".github/workflows"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
-CREATE_PR = False  # Set to False for direct commits
+CREATE_PR = True
 
 if not GITHUB_TOKEN:
     raise ValueError("GITHUB_TOKEN is not set in the environment.")
 
-# Initialize GitHub API client
-g = Github(GITHUB_TOKEN)
 
-def check_rate_limit():
-    """Check and log the API rate limit."""
-    rate_limit = g.get_rate_limit()
-    remaining = rate_limit.core.remaining
-    reset_time = rate_limit.core.reset
-    if remaining == 0:
-        sleep_time = (reset_time - time.time()) + 1
-        logging.warning(f"Rate limit exceeded. Sleeping for {sleep_time} seconds.")
-        time.sleep(sleep_time)
-    logging.info(f"API Rate Limit: {remaining}/{rate_limit.core.limit}")
+g = Github(GITHUB_TOKEN)
 
 def get_organization_repositories():
     """Get list of repositories from both organization and user."""
@@ -71,7 +60,6 @@ def get_default_branch(repo):
 def search_and_update_workflow_files(repo, branch):
     """Search and update files only in .github/workflows directory."""
     try:
-        check_rate_limit()
             
         contents = repo.get_contents(WORKFLOW_PATH, ref=branch)
         if not isinstance(contents, list):
