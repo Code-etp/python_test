@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO,
 # Set up authentication
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = "lahteeph"
-WORKFLOW_PATH = ".github/" 
+WORKFLOW_PATH = "/" 
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
 CREATE_PR = False  # Set to False for direct commits
