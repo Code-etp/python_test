@@ -10,6 +10,9 @@ WORKFLOW_PATH = ".github/workflows/"
 SEARCH_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v1"
 REPLACE_STRING = "aws-actions/amazon-ecs-deploy-task-definition@v2"
 
+if not GITHUB_TOKEN:
+    raise ValueError("GITHUB_TOKEN is not set in the environment.")
+
 # Initialize GitHub API client
 g = Github(GITHUB_TOKEN)
 
