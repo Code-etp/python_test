@@ -32,6 +32,4 @@ jobs:
       - name: Run the update script
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
-        run: |
-          python verify.py
-          python script.py
+        run: python script.py
