@@ -72,20 +72,12 @@ def has_workflow_directory(repo, branch):
     """Check if repository has a workflow directory in the specified branch."""
     try:
         check_rate_limit()
-        contents = repo.get_contents("/", ref=branch)
         
-        # Ensure contents is a list
-        if not isinstance(contents, list):
-            contents = [contents]
-
-        # Look for the workflow directory
-        for content in contents:
-            if content.type == "dir" and content.path == WORKFLOW_PATH.strip('/'):
-                logging.info(f"Workflow directory found in {repo.name}")
-                return True
+        # Try to directly access the workflows directory
+        repo.get_contents(WORKFLOW_PATH, ref=branch)
+        logging.info(f"Workflow directory found in {repo.name}")
+        return True
         
-        logging.info(f"No workflows directory found in {repo.name}")
-        return False
     except GithubException as e:
         if e.status == 404:
             logging.info(f"No workflows directory found in {repo.name}")
